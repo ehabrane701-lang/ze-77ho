@@ -398,7 +398,6 @@
 <script>
     let confirmCb=null, gChart=null, pChart=null, monInt=null, curResetU='', notifs=[];
 
-    // Toast helper and mapping showT to toast
     function toast(msg,type='info'){
         const el=document.getElementById('toast');
         el.style.borderColor=type==='error'?'var(--red)':'var(--gold)';
@@ -812,7 +811,6 @@
         }
     }
 
-    // Init initialization on load
     checkAuth();
     loadDashboard();
     loadPendingUsers();
