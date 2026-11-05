@@ -566,7 +566,6 @@
             border-color: rgba(0,200,83,0.3);
             box-shadow: 0 0 8px rgba(0,200,83,0.15);
         }
-        .tab-btn.active::after { display: none; }
         .tab-content {
             display: none;
             animation: fade 0.2s;
@@ -585,37 +584,6 @@
             font-size: 0.75rem;
             color: #b0f0b0;
             white-space: pre-wrap;
-        }
-        .files-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .files-table th, .files-table td {
-            padding: 12px 8px;
-            border-bottom: 1px solid var(--gold);
-            text-align: right;
-        }
-        .upload-zone {
-            border: 1px dashed var(--gold);
-            border-radius: 20px;
-            padding: 25px;
-            text-align: center;
-            margin-bottom: 20px;
-            cursor: pointer;
-            background: rgba(255, 215, 0, 0.02);
-        }
-        .file-btn {
-            background: rgba(255, 215, 0, 0.2);
-            border: none;
-            border-radius: 30px;
-            padding: 4px 12px;
-            margin: 0 4px;
-            cursor: pointer;
-            color: white;
-        }
-        .file-btn.delete {
-            background: rgba(255, 61, 90, 0.2);
-            color: var(--red);
         }
         .stats-details {
             display: grid;
@@ -730,20 +698,7 @@
             margin: 0 auto 20px;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .toast {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #1e293b;
-            border: 1px solid var(--gold);
-            border-radius: 60px;
-            padding: 10px 24px;
-            z-index: 1100;
-            display: none;
-            font-size: 0.8rem;
-        }
-
+        
         .notif-box {
             position: fixed;
             top: 20px;
@@ -796,19 +751,6 @@
             color: var(--gold);
         }
 
-        @media (max-width: 768px) {
-            .stats-row { grid-template-columns: repeat(2,1fr); gap: 12px; }
-            .servers-grid { grid-template-columns: 1fr; }
-            .top-bar { flex-wrap: wrap; gap: 12px; }
-            .main-content { padding: 16px; }
-            .tabs { gap: 8px; }
-            .tab-btn { padding: 4px 12px; font-size: 0.75rem; }
-            .detail-actions-bar { gap: 8px; }
-            .detail-action-btn { padding: 4px 12px; font-size: 0.7rem; }
-            .server-actions .action-group { flex-wrap: wrap; }
-            .languages-grid, .plans-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-    
         .fm-breadcrumb {
             display: flex; align-items: center; gap: 6px;
             padding: 8px 14px; margin-bottom: 14px;
@@ -845,12 +787,6 @@
         .fm-newfolder:hover{ background: rgba(0,200,83,0.1); box-shadow: 0 4px 12px rgba(0,200,83,0.15); }
         .fm-dlzone   { border-color: rgba(0,200,83,0.45); color: #00c853; }
         .fm-dlzone:hover   { background: rgba(0,200,83,0.12); box-shadow: 0 4px 14px rgba(0,200,83,0.2); }
-        .fm-badge-beta {
-            position: absolute; top: -6px; left: 8px;
-            background: #7c3aed; color: #0a0808;
-            font-size: 0.55rem; font-weight: 800; padding: 2px 6px;
-            border-radius: 20px; letter-spacing: 0.5px;
-        }
 
         .fm-search-wrap {
             position: relative; margin-bottom: 14px;
@@ -1002,24 +938,19 @@
             margin-bottom: 12px;
             flex-wrap: wrap;
         }
-        .bot-username-notice {
-            background: rgba(0,200,83,0.06);
-            border: 1px solid rgba(0,200,83,0.25);
-            border-radius: 16px;
-            padding: 10px 18px;
-            margin: 10px 0 16px 0;
-            text-align: center;
-            color: #9ca3cf;
-            font-size: 0.82rem;
-            line-height: 1.7;
+
+        @media (max-width: 768px) {
+            .stats-row { grid-template-columns: repeat(2,1fr); gap: 12px; }
+            .servers-grid { grid-template-columns: 1fr; }
+            .top-bar { flex-wrap: wrap; gap: 12px; }
+            .main-content { padding: 16px; }
+            .tabs { gap: 8px; }
+            .tab-btn { padding: 4px 12px; font-size: 0.75rem; }
+            .detail-actions-bar { gap: 8px; }
+            .detail-action-btn { padding: 4px 12px; font-size: 0.7rem; }
+            .server-actions .action-group { flex-wrap: wrap; }
+            .languages-grid, .plans-grid { grid-template-columns: repeat(2, 1fr); }
         }
-        .bot-username-notice a {
-            color: var(--gold);
-            text-decoration: none;
-            font-weight: 700;
-            font-size: 0.95rem;
-        }
-        .bot-username-notice a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -1072,6 +1003,7 @@
             </div>
         </div>
 
+        <!-- الصفحة الرئيسية للوحة التحكم -->
         <div id="homeView">
             <div class="stats-row">
                 <div class="stat-card"><div class="stat-header"><span class="stat-title">السيرفرات المستخدمة</span><div class="stat-icon"><i class="fas fa-server"></i></div></div><div class="stat-value" id="usedServers">0/1</div></div>
@@ -1087,6 +1019,7 @@
             <div class="servers-grid" id="serversGrid"></div>
         </div>
 
+        <!-- صفحة تفاصيل وإدارة السيرفر (الكونسول والملفات) -->
         <div id="detailView" class="server-detail">
             <div class="detail-header">
                 <button class="back-btn" onclick="goHome()"><i class="fas fa-arrow-right"></i> العودة</button>
@@ -1100,19 +1033,8 @@
                     <i class="fas fa-folder-open"></i> الملفات
                 </button>
             </div>
-            <div class="detail-actions-bar" id="serverActionsBar" style="display:none">
-                <button class="detail-action-btn start" id="detailStartBtn2"><i class="fas fa-play"></i> تشغيل</button>
-                <button class="detail-action-btn stop" id="detailStopBtn2">إيقاف</button>
-                <button class="detail-action-btn restart" id="detailRestartBtn2">إعادة تشغيل</button>
-                <button class="detail-action-btn delete" id="detailDeleteBtn2">حذف</button>
-            </div>
-            <div class="tabs" style="display:none">
-                <button class="tab-btn active" data-tab="console"><i class="fas fa-terminal"></i> الكونسول</button>
-                <button class="tab-btn" data-tab="files"><i class="fas fa-folder-open"></i> الملفات</button>
-                <button class="tab-btn" data-tab="stats"><i class="fas fa-chart-bar"></i> الإحصائيات</button>
-                <button class="tab-btn" data-tab="settings"><i class="fas fa-cog"></i> الإعدادات</button>
-                <button class="tab-btn" data-tab="api"><i class="fas fa-key"></i> مفاتيح API</button>
-            </div>
+
+            <!-- تبويب الكونسول -->
             <div id="consoleTab" class="tab-content active">
                 <div class="console-ctrl-bar">
                     <button class="detail-action-btn start" id="detailStartBtn"><i class="fas fa-play"></i> تشغيل</button>
@@ -1122,6 +1044,8 @@
                 </div>
                 <div class="console-box" id="consoleOut"></div>
             </div>
+
+            <!-- تبويب الملفات -->
             <div id="filesTab" class="tab-content">
                 <div class="fm-breadcrumb" id="fmBreadcrumb">
                     <span class="fm-crumb fm-crumb-root" onclick="navigateTo('')"><i class="fas fa-home"></i> الرئيسية</span>
@@ -1181,38 +1105,9 @@
                     <div class="fm-ctx-item fm-ctx-delete" onclick="ctxDelete()"><i class="fas fa-trash"></i> حذف</div>
                 </div>
             </div>
-            <div id="statsTab" class="tab-content">
-                <div class="stats-details">
-                    <div class="stat-detail-card"><div><i class="fas fa-microchip"></i> CPU</div><div class="stat-value" id="cpuStat">0%</div><div class="stat-progress"><div class="stat-progress-bar" id="cpuProgress"></div></div></div>
-                    <div class="stat-detail-card"><div><i class="fas fa-memory"></i> RAM</div><div class="stat-value" id="ramStat">0 MB / 0 MB</div><div class="stat-progress"><div class="stat-progress-bar" id="ramDetailProgress"></div></div></div>
-                    <div class="stat-detail-card"><div><i class="fas fa-hdd"></i> التخزين</div><div class="stat-value" id="storageStat">0 MB / 0 MB</div><div class="stat-progress"><div class="stat-progress-bar" id="storageProgress"></div></div></div>
-                    <div class="stat-detail-card"><div><i class="fas fa-clock"></i> وقت التشغيل</div><div class="stat-value" id="uptimeStat">0</div></div>
-                </div>
-            </div>
-            <div id="settingsTab" class="tab-content">
-                <div style="background: rgba(12,18,34,0.6); border-radius: 24px; padding: 20px; margin-bottom: 20px;">
-                    <div><i class="fas fa-rocket"></i> ملف بدء التشغيل</div>
-                    <div style="display: flex; gap: 12px; margin-top: 12px;"><select id="startupFileSelect" style="background:#0a0c18; border:1px solid var(--gold); border-radius:40px; padding:8px 16px; color:white;"></select><button class="action-btn" onclick="setStartupFile()">حفظ</button></div>
-                </div>
-                <div style="background: rgba(12,18,34,0.6); border-radius: 24px; padding: 20px;">
-                    <div>الخطة: <span id="planDetails"></span></div>
-                    <div>الرام الأقصى: <span id="ramLimit"></span> MB</div>
-                    <div>المساحة القصوى: <span id="storageLimit"></span> MB</div>
-                </div>
-            </div>
-            <div id="apiTab" class="tab-content">
-                <div class="api-panel">
-                    <h3><i class="fas fa-key"></i> إدارة مفاتيح API</h3>
-                    <p>مفتاح API الحالي:</p>
-                    <div class="api-key-display" id="currentApiKeyDisplay">لا يوجد مفتاح</div>
-                    <div class="api-actions">
-                        <button class="action-btn" onclick="generateApiKey()">إنشاء مفتاح جديد</button>
-                        <button class="action-btn" onclick="revokeApiKey()">إبطال المفتاح</button>
-                    </div>
-                </div>
-            </div>
         </div>
 
+        <!-- صفحة إنشاء سيرفر جديد -->
         <div id="createServerView" class="create-server-view">
             <div class="detail-header">
                 <button class="back-btn" onclick="goHome()"><i class="fas fa-arrow-right"></i> العودة</button>
@@ -1234,8 +1129,7 @@
     </div>
 </div>
 
-<div id="plansModal" class="modal"><div class="modal-content">...</div></div>
-<div id="createProgressModal" class="modal"><div class="modal-content"><div id="createLoading"><div class="spinner"></div><p>جاري إنشاء الخادم...</p><div class="fun-fact" id="funFact">✨ استمتع باستضافة غير محدودة</div></div><div id="createSuccess" style="display:none;"><i class="fas fa-check-circle" style="font-size:3rem; color:#00ff88;"></i><p style="margin:16px 0;">تم إنشاء الخادم بنجاح!</p><button class="action-btn start" id="goToServerBtn">الانتقال إلى الخادم</button></div></div></div>
+<!-- النوافذ المنبثقة (Modals) -->
 <div id="editorModal" class="modal"><div class="modal-content"><textarea id="editorArea" rows="12" style="width:100%; background:#010409; border:1px solid var(--gold); border-radius:16px; padding:12px; color:white;"></textarea><button class="action-btn" style="width:100%; margin-top:16px;" onclick="saveFile()">حفظ</button></div></div>
 <div id="confirmModal" class="modal"><div class="modal-content"><p id="confirmMsg"></p><div style="display:flex; gap:12px; margin-top:20px;"><button class="action-btn" id="confirmYesBtn" style="background:var(--red);">تأكيد</button><button class="action-btn" onclick="closeConfirm()">إلغاء</button></div></div></div>
 <div id="createFileModal" class="modal"><div class="modal-content"><input type="text" id="newFileName" placeholder="script.py" style="width:100%; margin-bottom:12px; padding:10px; border-radius:40px; border:1px solid var(--gold); background:#010409; color:white;"><textarea id="newFileContent" rows="4" placeholder="المحتوى" style="width:100%; border-radius:16px; border:1px solid var(--gold); background:#010409; color:white; padding:12px;"></textarea><button class="action-btn" style="width:100%; margin-top:16px;" onclick="createFile()">إنشاء</button></div></div>
@@ -1268,17 +1162,6 @@
 
     function closeNotif() { document.getElementById('notifBox').style.display = 'none'; }
 
-    function showLoading(show, customFact = null) {
-        const overlay = document.getElementById('loadingOverlay');
-        if (show) {
-            const fact = customFact || funFacts[Math.floor(Math.random() * funFacts.length)];
-            document.getElementById('loadingFact').innerText = fact;
-            overlay.classList.add('active');
-        } else {
-            overlay.classList.remove('active');
-        }
-    }
-
     function showConfirm(msg, cb) {
         document.getElementById('confirmMsg').innerText = msg;
         confirmAction = cb;
@@ -1299,7 +1182,6 @@
             if (nav === 'dashboard') { goHome(); closeSidebar(); return; }
             if (nav === 'servers') { loadServers(); goHome(); closeSidebar(); return; }
             if (nav === 'account') { showNotif('سيتم إضافة إعدادات الحساب قريباً', 'info'); closeSidebar(); return; }
-            if (nav === 'api') { if(currentServer) document.querySelector('.tab-btn[data-tab="api"]').click(); else showNotif('افتح سيرفراً أولاً', 'warning'); closeSidebar(); return; }
             if (nav === 'admin') { window.location.href = '/admin'; closeSidebar(); return; }
         };
     });
@@ -1327,8 +1209,7 @@
         setupPlanCards();
         selectedLanguage = null;
         selectedPlan = null;
-        const finalBtn = document.getElementById('createServerFinalBtn');
-        finalBtn.disabled = true;
+        document.getElementById('createServerFinalBtn').disabled = true;
         document.getElementById('createServerLoadingMsg').style.display = 'none';
     }
 
@@ -1444,8 +1325,6 @@
             const d = await r.json();
             document.getElementById('ramUsage').innerText = d.memory + '%';
             document.getElementById('ramProgress').style.width = d.memory + '%';
-            document.getElementById('cpuStat').innerText = d.cpu + '%';
-            document.getElementById('cpuProgress').style.width = d.cpu + '%';
         } catch(e) {}
     }
 
@@ -1458,9 +1337,6 @@
             const diskTotal = d.stats.disk_total || 100, diskUsed = d.stats.disk_used || 0;
             document.getElementById('diskUsed').innerText = `${Math.round(diskUsed)}/${diskTotal} MB`;
             document.getElementById('diskProgress').style.width = (diskUsed/diskTotal)*100 + '%';
-            document.getElementById('storageStat').innerText = `${Math.round(diskUsed)}/${diskTotal} MB`;
-            document.getElementById('storageProgress').style.width = (diskUsed/diskTotal)*100 + '%';
-            document.getElementById('storageLimit').innerText = diskTotal;
             const grid = document.getElementById('serversGrid');
             if(d.servers.length === 0) {
                 document.getElementById('noServerBlock').style.display = 'block';
@@ -1481,9 +1357,7 @@
                         <span title="التخزين"><i class="fas fa-hdd"></i> ${s.storage_limit || 100}MB</span>
                         <span title="النواة"><i class="fas fa-microchip"></i> ${s.cpu_limit || 0.5} نواة</span>
                         <span title="الرام"><i class="fas fa-memory"></i> ${s.ram_limit || 256}MB RAM</span>
-                        <span title="وقت التشغيل"><i class="fas fa-clock"></i> ${s.uptime || '—'}</span>
                         <span title="اللغة"><i class="fas fa-code"></i> ${s.language || 'python'}</span>
-                        <span title="الخطة" style="color:${s.plan==='free' ? '#9ca3cf' : '#FFD700'}"><i class="fas fa-tag"></i> ${s.plan==='free' ? 'مجاني' : s.plan}</span>
                     </div>
                     <div class="server-actions"><div class="action-group"><button class="action-btn start" data-action="start" data-folder="${s.folder}"><i class="fas fa-play"></i> تشغيل</button><button class="action-btn restart" data-action="restart" data-folder="${s.folder}"><i class="fas fa-sync-alt"></i> إعادة</button><button class="action-btn stop" data-action="stop" data-folder="${s.folder}"><i class="fas fa-stop"></i> إيقاف</button></div><div class="action-group"><button class="action-btn delete" data-action="delete" data-folder="${s.folder}"><i class="fas fa-trash"></i> حذف</button><button class="action-btn detail" data-action="detail" data-folder="${s.folder}"><i class="fas fa-chevron-left"></i> تفاصيل</button></div></div>
                 `;
@@ -1533,18 +1407,11 @@
         document.getElementById('createServerView').classList.remove('active');
         const langIcon = getLanguageIcon(s.language);
         document.getElementById('detailTitle').innerHTML = `${langIcon} ${escapeHtml(s.title)}`;
-        document.getElementById('ramLimit').innerText = s.ram_limit || 256;
-        document.getElementById('planDetails').innerText = s.plan === 'free' ? 'مجاني' : s.plan;
         if(polling) clearInterval(polling);
         fetchStats();
         polling = setInterval(fetchStats, 4000);
         loadFiles();
-        loadStartupFiles();
-        loadApiKey();
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-        document.getElementById('consoleTab').classList.add('active');
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelector('.tab-btn[data-tab="console"]').classList.add('active');
+        switchToConsole();
         document.getElementById('detailStartBtn').onclick = () => performAction(currentServer.folder, 'start');
         document.getElementById('detailStopBtn').onclick = () => performAction(currentServer.folder, 'stop');
         document.getElementById('detailRestartBtn').onclick = () => performAction(currentServer.folder, 'restart');
@@ -1559,10 +1426,6 @@
             if(!d.success) return;
             document.getElementById('consoleOut').innerHTML = (d.logs || 'لا توجد مخرجات').split('\n').map(l => `<div>${escapeHtml(l)}</div>`).join('');
             document.getElementById('consoleOut').scrollTop = document.getElementById('consoleOut').scrollHeight;
-            document.getElementById('ramStat').innerText = `${d.mem || 0} MB / ${currentServer.ram_limit || 256} MB`;
-            const ramPercent = (parseFloat(d.mem || 0) / (currentServer.ram_limit || 256)) * 100;
-            document.getElementById('ramDetailProgress').style.width = Math.min(ramPercent, 100) + '%';
-            document.getElementById('uptimeStat').innerText = d.uptime || '0';
         } catch(e) {}
     }
 
@@ -1595,18 +1458,6 @@
         document.getElementById('editorModal').classList.remove('active');
         currentFile = null;
         loadFiles();
-        loadStartupFiles();
-    }
-
-    async function deleteFile(name) {
-        showConfirm(`حذف ${name}؟`, async () => {
-            await fetch(`/api/files/delete/${currentServer.folder}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ names: [name] })
-            });
-            loadFiles();
-        });
     }
 
     async function uploadFiles(files) {
@@ -1648,12 +1499,6 @@
         loadFiles();
     }
 
-    async function unzipFile(name) {
-        showNotif('جاري فك الضغط...', 'info');
-        await fetch(`/api/files/unzip/${currentServer.folder}/${name}`, { method: 'POST' });
-        loadFiles();
-    }
-
     async function createFile() {
         const name = document.getElementById('newFileName').value.trim();
         const content = document.getElementById('newFileContent').value;
@@ -1663,64 +1508,9 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ filename: name, content })
         });
-        closeCreateFileModal();
+        document.getElementById('createFileModal').classList.remove('active');
         loadFiles();
-        loadStartupFiles();
     }
-
-    function closeCreateFileModal() { document.getElementById('createFileModal').classList.remove('active'); }
-
-    async function loadStartupFiles() {
-        if(!currentServer) return;
-        const r = await fetch(`/api/files/list/${currentServer.folder}`);
-        const files = await r.json();
-        const pyFiles = files.filter(f => f.name.endsWith('.py') && !f.is_dir);
-        const select = document.getElementById('startupFileSelect');
-        if(select) select.innerHTML = '<option value="">-- اختر ملف التشغيل --</option>' + pyFiles.map(f => `<option value="${f.name}" ${currentServer.startup_file===f.name ? 'selected' : ''}>${f.name}</option>`).join('');
-    }
-
-    async function setStartupFile() {
-        const filename = document.getElementById('startupFileSelect').value;
-        if(!filename) return;
-        await fetch(`/api/server/set-startup/${currentServer.folder}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filename })
-        });
-        showNotif('تم تعيين ملف التشغيل', 'success');
-    }
-
-    async function loadApiKey() { document.getElementById('currentApiKeyDisplay').innerText = 'لا يوجد مفتاح. اضغط إنشاء مفتاح جديد.'; }
-
-    async function generateApiKey() {
-        try {
-            const res = await fetch('/api/create_api_key', { method: 'POST' });
-            const data = await res.json();
-            if(data.success) {
-                document.getElementById('currentApiKeyDisplay').innerText = data.api_key;
-                showNotif('تم إنشاء مفتاح API جديد', 'success');
-            } else {
-                showNotif('فشل إنشاء المفتاح', 'error');
-            }
-        } catch(e) {
-            showNotif('خطأ', 'error');
-        }
-    }
-
-    async function revokeApiKey() { showNotif('يمكنك حذف المفتاح من قاعدة البيانات يدوياً', 'warning'); }
-
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.onclick = () => {
-            const tab = btn.dataset.tab;
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.getElementById(`${tab}Tab`).classList.add('active');
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            if(tab === 'files') loadFiles();
-            if(tab === 'settings') loadStartupFiles();
-            if(tab === 'api') loadApiKey();
-        };
-    });
 
     async function logout() { await fetch('/api/logout', { method: 'POST' }); window.location.href = '/login'; }
     function escapeHtml(s) { return String(s).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
@@ -1731,7 +1521,6 @@
 
     let currentPath = '';
     let ctxFileName = '';
-    let ctxFileIsDir = false;
 
     function getFileIcon(name, isDir) {
         if (isDir) return '<i class="fas fa-folder fm-file-icon fi-folder"></i>';
@@ -1744,9 +1533,7 @@
             md: '<i class="fas fa-file-lines fm-file-icon fi-txt"></i>',
             zip: '<i class="fas fa-file-zipper fm-file-icon fi-zip"></i>',
             png: '<i class="fas fa-image fm-file-icon fi-image"></i>',
-            jpg: '<i class="fas fa-image fm-file-icon fi-image"></i>',
-            jpeg: '<i class="fas fa-image fm-file-icon fi-image"></i>',
-            gif: '<i class="fas fa-image fm-file-icon fi-image"></i>'
+            jpg: '<i class="fas fa-image fm-file-icon fi-image"></i>'
         };
         return icons[ext] || '<i class="fas fa-file fm-file-icon fi-default"></i>';
     }
@@ -1844,7 +1631,6 @@
     function openCtxMenu(e, name, isDir) {
         e.stopPropagation();
         ctxFileName = name;
-        ctxFileIsDir = isDir;
         const menu = document.getElementById('fmContextMenu');
         document.getElementById('ctxDownloadItem').style.display = isDir ? 'none' : 'flex';
         menu.style.display = 'block';
@@ -1899,21 +1685,15 @@
     function switchToConsole() {
         document.getElementById('navConsoleBtn').classList.add('active');
         document.getElementById('navFilesBtn').classList.remove('active');
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById('consoleTab').classList.add('active');
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        const cb = document.querySelector('.tab-btn[data-tab="console"]');
-        if (cb) cb.classList.add('active');
+        document.getElementById('filesTab').classList.remove('active');
     }
 
     function switchToFiles() {
         document.getElementById('navFilesBtn').classList.add('active');
         document.getElementById('navConsoleBtn').classList.remove('active');
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById('filesTab').classList.add('active');
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        const fb = document.querySelector('.tab-btn[data-tab="files"]');
-        if (fb) fb.classList.add('active');
+        document.getElementById('consoleTab').classList.remove('active');
         loadFiles();
     }
 </script>
