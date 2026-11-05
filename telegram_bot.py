@@ -17,18 +17,19 @@ from telegram.ext import (
 
 # ========== إعداد السجل (Logging) ==========
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
 # ========== إعدادات البوت الأساسية ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9057598891:AAGU-aOtkAydGZqLjd2xRwepsvlQW6xcggE")
-API_BASE_URL = os.getenv("API_BASE_URL", "")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://ze-77ho.onrender.com")
 
-# ========== قائمة المسؤولين ==========
+# ========== قائمة المسؤولين (المشرفين) ==========
 ADMIN_IDS = [
     5603553783,
+    1002670694,  # الأدمن الجديد المضاف
 ]
 
 # ========== دوال مساعدة لطلب API والتخزين ==========
@@ -54,15 +55,16 @@ def api_download_file(endpoint, params=None):
     try:
         resp = requests.get(url, params=params, timeout=60)
         if resp.status_code == 200:
-            return resp.content, resp.headers.get('Content-Disposition', '')
+            return resp.content, resp.headers.get("Content-Disposition", "")
         return None, None
     except Exception as e:
         logger.error(f"File Download Error ({endpoint}): {e}")
         return None, None
 
 def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    chat_id = update.effective_chat.id
-    if chat_id in ADMIN_IDS:
+    # التحقق من آيدي المستخدم عبر الرسالة أو الـ Callback Query
+    user = update.effective_user
+    if user and user.id in ADMIN_IDS:
         return True
     return context.user_data.get("is_admin", False)
 
@@ -80,10 +82,9 @@ def format_user_info(user) -> str:
  WAITING_FOR_ADD_ADMIN, WAITING_FOR_SET_SERVERS) = range(11)
 
 # ==========================================================
-# قسم مشغل بوتات التلجرام (Runner Section - SERVERHUP / MERO HOST)
+# قسم مشغل بوتات التلجرام (Runner Section)
 # ==========================================================
 async def runner_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """معالج أمر /start للبوتات المشغلة"""
     await update.message.reply_text(
         "👋 مرحباً! أنا بوت تلجرام يعمل من خلال SERVERHUP BRO HOST\n\n"
         "الأوامر المتاحة:\n"
@@ -93,7 +94,6 @@ async def runner_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 async def runner_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """معالج أمر /help للبوتات المشغلة"""
     await update.message.reply_text(
         "📚 المساعدة:\n\n"
         "هذا البوت يعمل بشكل مستمر على خادم SERVERHUP BRO HOST\n"
@@ -101,7 +101,6 @@ async def runner_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 async def runner_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """معالج أمر /info للبوتات المشغلة"""
     await update.message.reply_text(
         "ℹ️ معلومات البوت:\n\n"
         "🤖 البوت: SERVERHUP BRO HOST Bot\n"
@@ -110,7 +109,6 @@ async def runner_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 async def runner_handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """معالج الرسائل العادية للبوتات المشغلة"""
     if not update.message or not update.message.text:
         return
     user_message = update.message.text
@@ -120,36 +118,17 @@ async def runner_handle_message(update: Update, context: ContextTypes.DEFAULT_TY
     )
 
 async def runner_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """معالج الأخطاء للبوتات المشغلة"""
     logger.error(msg="Exception while handling an update in runner:", exc_info=context.error)
 
 def run_bot(token: str, bot_name: str) -> None:
-    """تشغيل البوت باستخدام التوكن المعطى بشكل منفصل"""
     try:
-        print("\n" + "═"*60)
-        print(f" 🤖 [mero HOST] - جاري تشغيل البوت: {bot_name}")
-        print(" 🚀 يتم الآن الاتصال بخوادم تلجرام...")
-        print("═"*60 + "\n")
-        
-        logger.info(f"🤖 بدء تشغيل البوت: {bot_name}")
-        
         application = Application.builder().token(token).build()
-
         application.add_handler(CommandHandler("start", runner_start))
         application.add_handler(CommandHandler("help", runner_help_command))
         application.add_handler(CommandHandler("info", runner_info_command))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, runner_handle_message))
         application.add_error_handler(runner_error_handler)
-
-        print("\n" + "✨"*20)
-        print(f" ✅ البوت {bot_name} جاهز الآن!")
-        print(" 📡 الحالة: نشط وينتظر الرسائل...")
-        print(" ✨ استمتع بخدمة ZAEM BRO HOST ✨")
-        print("✨"*20 + "\n")
-        
-        logger.info(f"✅ البوت {bot_name} جاهز وينتظر الرسائل...")
         application.run_polling()
-        
     except Exception as e:
         logger.error(f"❌ خطأ في تشغيل البوت {bot_name}: {str(e)}")
 
@@ -175,7 +154,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_admin(update, context):
         keyboard.append([InlineKeyboardButton("👑 لوحة الإدارة", callback_data="admin_panel")])
 
-    username = context.user_data.get('username', '')
+    username = context.user_data.get("username", "مستخدم")
     text = f"🔹 *القائمة الرئيسية* 🔹\nمرحباً {username}!"
 
     if message:
@@ -188,7 +167,6 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ========== طلبات الانضمام للبوت ==========
 async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة طلبات الانضمام وإرسالها للأدمن"""
     join_request = update.chat_join_request
     if not join_request:
         return
@@ -258,7 +236,6 @@ async def handle_join_request_action(update: Update, context: ContextTypes.DEFAU
         await query.answer(f"❌ خطأ: {e}", show_alert=True)
 
 async def notify_admins_new_user(context: ContextTypes.DEFAULT_TYPE, user):
-    """إرسال إشعار لكل الأدمنية بمستخدم جديد مع زر فتح المحادثة"""
     for admin_id in ADMIN_IDS:
         try:
             keyboard = [[InlineKeyboardButton("💬 فتح المحادثة", url=f"tg://user?id={user.id}")]]
@@ -286,11 +263,11 @@ async def show_servers_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     servers = result.get("servers", [])
     if not servers:
         await query.edit_message_text(
-            "🚀 لا توجد سيرفرات حالياً.\nاستخدم 'إنشاء سيرفر جديد'.",
+            "🚀 لا توجد سيرفرات حالياً.\nاستخدم إنشاء سيرفر جديد.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 رجوع", callback_data="main_menu")]]))
         return
     for srv in servers:
-        status_emoji = "🟢" if srv.get('status') == "Running" else "⚫"
+        status_emoji = "🟢" if srv.get("status") == "Running" else "⚫"
         text = f"{status_emoji} *{srv.get('title')}*\n"
         text += f"📊 الحالة: {srv.get('status')}\n🔌 المنفذ: {srv.get('port')}\n💾 الخطة: {srv.get('plan')}\n⏱️ وقت التشغيل: {srv.get('uptime')}"
         keyboard = [
@@ -304,12 +281,12 @@ async def show_servers_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
     await show_main_menu(update, context)
 
-# ========== لوحة الإدارة الكاملة ==========
+# ========== لوحة الإدارة الكاملة (للأدمن فقط) ==========
 async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     if not is_admin(update, context):
-        await query.edit_message_text("❌ غير مصرح.")
+        await query.edit_message_text("❌ غير مصرح لك باستخدام لوحة الإدارة.")
         return
 
     result = api_request("/api/admin/users", params={"api_key": context.user_data.get("api_key", "")})
@@ -368,7 +345,6 @@ async def admin_list_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = text[:4000] + "\n..."
     await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# ========== إدارة الحظر والحسابات والأدمنية ==========
 async def admin_ban_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -395,7 +371,7 @@ async def admin_ban_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if result and result.get("success"):
         await update.message.reply_text(f"🚫 تم حظر المستخدم `{username}` بنجاح.", parse_mode="Markdown")
     else:
-        msg = result.get('message', 'خطأ') if result else 'خطأ'
+        msg = result.get("message", "خطأ") if result else "خطأ"
         await update.message.reply_text(f"❌ فشل: {msg}")
     await show_main_menu(update, context)
     return ConversationHandler.END
@@ -408,7 +384,7 @@ async def admin_unban_execute(update: Update, context: ContextTypes.DEFAULT_TYPE
     if result and result.get("success"):
         await update.message.reply_text(f"✅ تم رفع حظر `{username}` بنجاح.", parse_mode="Markdown")
     else:
-        msg = result.get('message', 'خطأ') if result else 'خطأ'
+        msg = result.get("message", "خطأ") if result else "خطأ"
         await update.message.reply_text(f"❌ فشل: {msg}")
     await show_main_menu(update, context)
     return ConversationHandler.END
@@ -432,7 +408,7 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     if broadcast_result and broadcast_result.get("success"):
         await update.message.reply_text(f"✅ تم إرسال الإذاعة بنجاح!\n📊 {broadcast_result.get('message', '')}")
     else:
-        msg = broadcast_result.get('message', 'تم الإرسال') if broadcast_result else 'تم الإرسال'
+        msg = broadcast_result.get("message", "تم الإرسال") if broadcast_result else "تم الإرسال"
         await update.message.reply_text(f"⚠️ نتيجة الإذاعة: {msg}")
     await show_main_menu(update, context)
     return ConversationHandler.END
@@ -457,7 +433,7 @@ async def admin_set_servers_execute(update: Update, context: ContextTypes.DEFAUL
     if result and result.get("success"):
         await update.message.reply_text(f"✅ تم ضبط حد السيرفرات لـ `{username}` على `{count}`", parse_mode="Markdown")
     else:
-        msg = result.get('message', 'خطأ') if result else 'خطأ'
+        msg = result.get("message", "خطأ") if result else "خطأ"
         await update.message.reply_text(f"❌ فشل: {msg}")
     await show_main_menu(update, context)
     return ConversationHandler.END
@@ -494,7 +470,6 @@ async def admin_add_admin_execute(update: Update, context: ContextTypes.DEFAULT_
     await show_main_menu(update, context)
     return ConversationHandler.END
 
-# ========== تحميل ملفات مستخدم (لأدمن التحكم) ==========
 async def admin_download_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -520,7 +495,7 @@ async def admin_download_got_user(update: Update, context: ContextTypes.DEFAULT_
         return ConversationHandler.END
     keyboard = []
     for s in servers:
-        emoji = "🟢" if s.get('status') == "Running" else "⚫"
+        emoji = "🟢" if s.get("status") == "Running" else "⚫"
         keyboard.append([InlineKeyboardButton(f"{emoji} {s.get('name')} ({s.get('language')})",
                                                callback_data=f"dlsrv_{s.get('folder')}")])
     keyboard.append([InlineKeyboardButton("❌ إلغاء", callback_data="main_menu")])
@@ -538,7 +513,7 @@ async def admin_download_got_server(update: Update, context: ContextTypes.DEFAUL
     if not result or not result.get("success"):
         await query.edit_message_text("❌ فشل جلب ملفات السيرفر.")
         return ConversationHandler.END
-    files = [f for f in result.get("files", []) if not f.get('is_dir')]
+    files = [f for f in result.get("files", []) if not f.get("is_dir")]
     if not files:
         await query.edit_message_text("📂 لا توجد ملفات في هذا السيرفر.")
         return ConversationHandler.END
@@ -592,7 +567,7 @@ async def admin_delete_user_confirm(update: Update, context: ContextTypes.DEFAUL
     if result and result.get("success"):
         await update.message.reply_text(f"✅ تم حذف المستخدم `{username}`", parse_mode="Markdown")
     else:
-        msg = result.get('message', 'خطأ') if result else 'خطأ'
+        msg = result.get("message", "خطأ") if result else "خطأ"
         await update.message.reply_text(f"❌ فشل الحذف: {msg}")
     await show_main_menu(update, context)
     return ConversationHandler.END
@@ -672,7 +647,7 @@ async def receive_server_name(update: Update, context: ContextTypes.DEFAULT_TYPE
     if result and result.get("success"):
         await update.message.reply_text(f"✅ تم إنشاء السيرفر `{name}` بنجاح!", parse_mode="Markdown")
     else:
-        msg = result.get('message', 'خطأ') if result else 'خطأ'
+        msg = result.get("message", "خطأ") if result else "خطأ"
         await update.message.reply_text(f"❌ فشل الإنشاء: {msg}")
     await show_main_menu(update, context)
     return ConversationHandler.END
@@ -725,8 +700,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_stats":
         await admin_stats(update, context)
     elif data.startswith("action_"):
-        parts = data.split('_')
-        folder = '_'.join(parts[1:-1])
+        parts = data.split("_")
+        folder = "_".join(parts[1:-1])
         action = parts[-1]
         result = api_request("/api/bot/server/action", method="POST", data={
             "api_key": context.user_data.get("api_key", ""),
@@ -763,7 +738,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             files = result.get("files", [])
             text = "📂 *ملفات السيرفر:*\n\n"
             for f in files[:20]:
-                icon = "📁" if f.get('is_dir') else "📄"
+                icon = "📁" if f.get("is_dir") else "📄"
                 text += f"{icon} `{f.get('name')}` - {f.get('size')}\n"
             keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="my_servers")]]
             await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -772,8 +747,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.id not in ADMIN_IDS:
-        await update.message.reply_text("❌ غير مصرح.")
+    if not is_admin(update, context):
+        await update.message.reply_text("❌ غير مصرح لك استخدام هذا الأمر.")
         return
     keyboard = [
         [InlineKeyboardButton("👑 لوحة الإدارة", callback_data="admin_panel")]
@@ -791,7 +766,7 @@ def main():
         entry_points=[
             CommandHandler("start", start),
             CommandHandler("admin", admin_command),
-            CallbackQueryHandler(button_callback)
+            CallbackQueryButton := CallbackQueryHandler(button_callback)
         ],
         states={
             WAITING_FOR_API_KEY: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_api_key)],
@@ -802,9 +777,8 @@ def main():
             WAITING_FOR_DOWNLOAD_FILE: [CallbackQueryHandler(admin_download_got_file, pattern="^dlfile_")],
             WAITING_FOR_BROADCAST_MSG: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_broadcast_send)],
             WAITING_FOR_BAN_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_ban_execute)],
-            WAITO_FOR_UNBAN_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_unban_execute)], # Handled below correctly
             WAITING_FOR_UNBAN_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_unban_execute)],
-            WAITING_FOR_ADD_ADMIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_add_admin_execute)],
+            WAITING_FOR_ADD_ADMIN: [MessageHandler(filters.TEXT & ~filters.Command if hasattr(filters, 'Command') else filters.TEXT & ~filters.COMMAND, admin_add_admin_execute)],
             WAITING_FOR_SET_SERVERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_set_servers_execute)],
         },
         fallbacks=[CommandHandler("start", start)],
@@ -818,10 +792,10 @@ def main():
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
-    # دعم تشغيل مشغل البوتات (Runner) من سطر الأوامر أو تشغيل لوحة التحكم الرئيسية تلقائياً
     if len(sys.argv) > 1:
         token = sys.argv[1]
         bot_name = sys.argv[2] if len(sys.argv) > 2 else "telegram_bot"
         run_bot(token, bot_name)
     else:
         main()
+
