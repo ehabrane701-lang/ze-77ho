@@ -180,6 +180,7 @@
         <span id="adminNameM" style="font-size:.75rem;color:#9ca3cf"></span>
     </div>
 
+
     <!-- PENDING USERS TAB -->
     <div id="tab-pending" class="tab-page">
         <div class="ptitle"><i class="fas fa-user-clock"></i> الحسابات المعلقة</div>
@@ -300,6 +301,35 @@
         </div>
     </div>
 
+    <!-- USER FILES -->
+    <div id="tab-userfiles" class="tab-page">
+        <div class="ptitle"><i class="fas fa-folder-open"></i> ملفات المستخدمين</div>
+        <div class="card">
+            <div class="ctitle"><i class="fas fa-user"></i> اختر المستخدم</div>
+            <div class="frow">
+                <div class="fg"><label>اسم المستخدم</label>
+                    <select id="ufUserSelect" onchange="loadUserServers()">
+                        <option value="">— اختر مستخدماً —</option>
+                    </select>
+                </div>
+                <div class="fg"><label>اختر السيرفر</label>
+                    <select id="ufServerSelect" onchange="loadServerFiles()">
+                        <option value="">— اختر سيرفراً —</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="card" id="ufFilesCard" style="display:none">
+            <div class="ctitle"><i class="fas fa-files"></i> ملفات السيرفر</div>
+            <div class="tw">
+                <table>
+                    <thead><tr><th>الاسم</th><th>الحجم</th><th>النوع</th><th>تنزيل</th></tr></thead>
+                    <tbody id="ufFilesList"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- BROADCAST -->
     <div id="tab-broadcast" class="tab-page">
         <div class="ptitle"><i class="fas fa-bullhorn"></i> إذاعة للمستخدمين</div>
@@ -369,6 +399,326 @@
 </div>
 <div class="toast" id="toast"></div>
 
+<script>
+    let confirmCb=null, gChart=null, pChart=null, monInt=null, curResetU='', notifs=[];
+
+    function toast(msg,type='info'){const el=document.getElementById('toast');el.style.borderColor=type==='error'?'var(--red)':'var(--gold)';const icons={success:'fa-check-circle',error:'fa-times-circle',info:'fa-info-circle'};el.innerHTML=`<i class="fas ${icons[type]||'fa-info-circle'}"></i> ${msg}`;el.style.display='block';clearTimeout(el._t);el._t=setTimeout(()=>el.style.display='none',3200);}
+    function showConfirm(msg,cb){document.getElementById('confirmMsg').innerText=msg;confirmCb=cb;document.getElementById('confirmModal').classList.add('show');}
+    function closeConfirm(){document.getElementById('confirmModal').classList.remove('show');confirmCb=null;}
+    document.getElementById('confirmYes').onclick=()=>{if(confirmCb)confirmCb();closeConfirm();};
+
+    // Notifications
+    async function loadNotifs(){
+        try{const d=await fetch('/api/notifications').then(r=>r.json());
+        if(!d.notifications)return;
+        notifs=d.notifications;
+        const unread=notifs.filter(n=>!n.is_read).length;
+        document.getElementById('ncount').innerText=unread||'';
+        document.getElementById('ncount').style.display=unread?'block':'none';
+        document.getElementById('nlist').innerHTML=notifs.length?notifs.map(n=>`
+            <div class="ni ${!n.is_read?'unread':''}" onclick="markRead(${n.id})">
+                <strong style="color:var(--gold);font-size:.8rem">${esc(n.title)}</strong><br>
+                <span style="color:#aaa;white-space:pre-wrap;font-size:.75rem">${esc(n.message)}</span>
+                <span class="ntime">${n.created_at?n.created_at.substring(0,16):''}</span>
+            </div>`).join(''):'<div style="padding:12px;color:#888;text-align:center;font-size:.78rem">لا توجد إشعارات</div>';}catch(e){}
+    }
+    async function markRead(id){await fetch('/api/notifications/mark_read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});loadNotifs();}
+    async function markAllRead(){for(const n of notifs)if(!n.is_read)await markRead(n.id);}
+    document.getElementById('nbell').onclick=(e)=>{e.stopPropagation();document.getElementById('ndrop').classList.toggle('show');};
+    document.addEventListener('click',()=>document.getElementById('ndrop').classList.remove('show'));
+
+    // Sidebar
+    function switchTab(name){
+        document.querySelectorAll('.tab-page').forEach(p=>p.classList.remove('active'));
+        document.querySelectorAll('.ni2').forEach(i=>i.classList.remove('active'));
+        const page=document.getElementById('tab-'+name);const item=document.querySelector(`.ni2[data-tab="${name}"]`);
+        if(page)page.classList.add('active');if(item)item.classList.add('active');
+        if(name!=='monitor'&&monInt){clearInterval(monInt);monInt=null;}
+        if(name==='dashboard')loadDashboard();
+        else if(name==='pending')loadPendingUsers();
+        else if(name==='users')loadUsers();
+        else if(name==='bans'){loadUsers();loadBanned();}
+        else if(name==='servers')loadServers();
+        else if(name==='userfiles')loadUFUsers();
+        else if(name==='monitor')startMonitor();
+    }
+    document.querySelectorAll('.ni2').forEach(item=>{ item.onclick=()=>{switchTab(item.dataset.tab);closeSidebar();}; });
+    document.getElementById('hbg').onclick=()=>{document.getElementById('sidebar').classList.add('open');document.getElementById('sovlay').classList.add('show');};
+    function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sovlay').classList.remove('show');}
+
+    function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);}
+
+    // Dashboard
+    async function loadDashboard(){
+        try{const m=await fetch('/api/system/metrics').then(r=>r.json());document.getElementById('dCpu').innerText=m.cpu+'%';document.getElementById('dCpuB').style.width=m.cpu+'%';document.getElementById('dRam').innerText=m.memory+'%';document.getElementById('dRamB').style.width=m.memory+'%';}catch(e){}
+        try{const d=await fetch('/api/admin/users').then(r=>r.json());if(!d.success)return;
+        document.getElementById('tUsers').innerText=d.users.length;
+        document.getElementById('tBanned').innerText=d.users.filter(u=>u.is_banned).length;
+        let tot=0,act=0;
+        for(const u of d.users){try{const sd=await fetch(`/api/servers?user=${u.username}`).then(r=>r.json());if(sd.servers){tot+=sd.servers.length;act+=sd.servers.filter(s=>s.status==='Running').length;}}catch(e){}}
+        document.getElementById('tServers').innerText=tot;document.getElementById('tActive').innerText=act;}catch(e){}
+        if(gChart)gChart.destroy();
+        const ctx=document.getElementById('growthChart').getContext('2d');
+        gChart=new Chart(ctx,{type:'line',data:{labels:['أسبوع 1','أسبوع 2','أسبوع 3','أسبوع 4'],datasets:[{label:'المستخدمون الجدد',data:[2,5,9,15],borderColor:'#FFD700',backgroundColor:'rgba(255,215,0,.07)',fill:true,tension:.4,pointBackgroundColor:'#FFD700'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#b0b8d4',font:{family:'Tajawal'}}}},scales:{x:{ticks:{color:'#6b7a9f'},grid:{color:'rgba(255,215,0,.04)'}},y:{ticks:{color:'#6b7a9f'},grid:{color:'rgba(255,215,0,.04)'}}}}});
+    }
+
+    // Users
+    
+// ===== PENDING USERS =====
+async function loadPendingUsers(){
+  try{
+    const r = await fetch('/api/pending_users');
+    const d = await r.json();
+    const list = document.getElementById('pendingList');
+    const badge = document.getElementById('pendingBadge');
+    if(!d.success || !d.users.length){
+      if(list) list.innerHTML='<div style="text-align:center;padding:30px;color:#6b7a9f;font-size:.85rem"><i class="fas fa-check-circle" style="color:var(--gold);font-size:1.5rem;display:block;margin-bottom:8px"></i>لا توجد حسابات معلقة</div>';
+      if(badge) badge.style.display='none';
+      return;
+    }
+    if(badge){badge.textContent=d.users.length;badge.style.display='inline';}
+    if(list) list.innerHTML = d.users.map(u=>`
+      <div style="display:flex;align-items:center;gap:12px;padding:12px;border-bottom:1px solid rgba(0,200,83,.07);flex-wrap:wrap">
+        <i class="fas fa-user-clock" style="color:var(--gold);font-size:1.1rem"></i>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:.88rem">${u.username}</div>
+          <div style="font-size:.72rem;color:#6b7a9f">${u.created_at}</div>
+        </div>
+        <button class="btn bgreen" style="padding:6px 14px;font-size:.8rem" onclick="approveUser('${u.username}')"><i class="fas fa-check"></i> قبول</button>
+        <button class="btn br" style="padding:6px 14px;font-size:.8rem" onclick="rejectUser('${u.username}')"><i class="fas fa-times"></i> رفض</button>
+      </div>
+    `).join('');
+  }catch(e){console.error(e);}
+}
+
+async function approveUser(username){
+  if(!confirm(`قبول حساب "${username}"?`)) return;
+  const r = await fetch('/api/approve_user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});
+  const d = await r.json();
+  showT(d.message||'تم القبول');
+  loadPendingUsers();
+}
+
+async function rejectUser(username){
+  if(!confirm(`رفض وحذف حساب "${username}"؟`)) return;
+  const r = await fetch('/api/reject_user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,reason:'رُفض الطلب من الإدارة'})});
+  const d = await r.json();
+  showT(d.message||'تم الرفض');
+  loadPendingUsers();
+}
+
+// ===== ADMIN API KEY =====
+async function generateAdminApiKey(){
+  if(!confirm('توليد مفتاح API جديد للأدمن؟ المفتاح القديم سيُلغى.')) return;
+  const r = await fetch('/api/admin/generate_api_key',{method:'POST'});
+  const d = await r.json();
+  if(d.success){
+    document.getElementById('adminApiKeyDisplay').textContent = d.api_key;
+    showT('✅ تم توليد المفتاح');
+  } else {
+    showT('❌ فشل التوليد');
+  }
+}
+
+function copyAdminApiKey(){
+  const val = document.getElementById('adminApiKeyDisplay').textContent;
+  if(val && val !== 'لم يتم توليد مفتاح بعد'){
+    navigator.clipboard.writeText(val).then(()=>showT('✅ تم النسخ'));
+  } else {
+    showT('⚠️ لا يوجد مفتاح للنسخ');
+  }
+}
+
+async function loadUsers(){
+        const tb=document.getElementById('usersList');tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:#555">جاري التحميل...</td></tr>';
+        try{const d=await fetch('/api/admin/users').then(r=>r.json());
+        if(!d.success||!d.users.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:#555">لا يوجد مستخدمون</td></tr>';return;}
+        tb.innerHTML=d.users.map(u=>`
+            <tr>
+                <td><strong>${esc(u.username)}</strong> ${u.is_vip?'<span class="badge b-vip">⭐ VIP</span>':''} ${u.is_banned?'<span class="badge b-ban">محظور</span>':''}</td>
+                <td><span id="pwd_${esc(u.username)}" style="font-family:monospace;font-size:.72rem;letter-spacing:2px">••••••••</span>
+                    <button class="ib gold" onclick="togglePwd('${esc(u.username)}','${esc(u.password||'')}')"><i class="fas fa-eye"></i></button>
+                    <button class="ib gold" onclick="showReset('${esc(u.username)}')"><i class="fas fa-key"></i></button></td>
+                <td><span class="badge ${u.is_admin?'b-admin':'b-user'}">${u.is_admin?'مسؤول':'مستخدم'}</span></td>
+                <td><input class="ilin" type="number" value="${u.max_servers}" style="width:60px" onchange="updateLimit('${esc(u.username)}',this.value)"></td>
+                <td><input class="ilin" type="number" value="${u.expiry_days}" style="width:70px" onchange="updateExpiry('${esc(u.username)}',this.value)"></td>
+                <td class="action-bar">
+                    ${!u.is_admin?`<button class="ib gold" title="ترقية VIP" onclick="quickVip('${esc(u.username)}',${!u.is_vip})"><i class="fas fa-crown"></i></button>`:''}
+                    ${!u.is_admin?`<button class="ib ${u.is_banned?'green':'red'}" title="${u.is_banned?'رفع الحظر':'حظر'}" onclick="quickBan('${esc(u.username)}',${!u.is_banned})"><i class="fas fa-${u.is_banned?'unlock':'ban'}"></i></button>`:''}
+                    <button class="ib red" title="حذف" onclick="deleteUser('${esc(u.username)}')"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>`).join('');
+        document.getElementById('userSearch').oninput=function(){const q=this.value.toLowerCase();tb.querySelectorAll('tr').forEach(r=>r.style.display=r.textContent.toLowerCase().includes(q)?'':'none');};
+        // also populate VIP/ban user selects
+        const selects=['banUsername','restrictUsername','vipUsername'];
+        }catch(e){tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--red)">خطأ في التحميل</td></tr>';}
+    }
+
+    async function loadBanned(){
+        const tb=document.getElementById('bannedList');
+        try{const d=await fetch('/api/admin/users').then(r=>r.json());
+        const banned=d.users?d.users.filter(u=>u.is_banned):[];
+        if(!banned.length){tb.innerHTML='<tr><td colspan="4" style="text-align:center;padding:14px;color:#555">لا يوجد محظورون</td></tr>';return;}
+        tb.innerHTML=banned.map(u=>`<tr><td><strong>${esc(u.username)}</strong></td><td style="font-family:monospace;font-size:.75rem">${esc(u.ban_ip||'—')}</td><td style="color:#8a94b8;font-size:.8rem">${esc(u.ban_reason||'—')}</td><td><button class="btn bgreen" style="padding:4px 12px;font-size:.72rem" onclick="doUnban('${esc(u.username)}')"><i class="fas fa-unlock"></i> رفع الحظر</button></td></tr>`).join('');
+        }catch(e){}
+    }
+
+    function togglePwd(u,p){const el=document.getElementById('pwd_'+u);el.innerText=el.innerText==='••••••••'?(p||'(غير محدد)'):'••••••••';}
+    function showReset(u){curResetU=u;document.getElementById('resetU').value=u;document.getElementById('resetP').value='';document.getElementById('resetPassModal').classList.add('show');}
+    async function execReset(){
+        const p=document.getElementById('resetP').value.trim();if(!p||p.length<4){toast('كلمة المرور 4 أحرف على الأقل','error');return;}
+        try{const r=await fetch('/api/admin/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:curResetU,new_password:p})});const d=await r.json();
+        if(d.success){toast(`تم تغيير كلمة مرور ${curResetU}`,'success');document.getElementById('resetPassModal').classList.remove('show');loadUsers();}else toast(d.message||'فشل','error');}catch(e){toast('خطأ','error');}
+    }
+    async function createUser(){
+        const username=document.getElementById('nUsername').value.trim(),password=document.getElementById('nPassword').value.trim(),max_servers=parseInt(document.getElementById('nMaxS').value)||1,expiry_days=parseInt(document.getElementById('nExpiry').value)||365;
+        if(!username||!password){toast('أدخل اسم المستخدم وكلمة المرور','error');return;}
+        try{const r=await fetch('/api/admin/create-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,max_servers,expiry_days})});const d=await r.json();
+        if(d.success){toast('✅ تم إنشاء الحساب','success');document.getElementById('nUsername').value='';document.getElementById('nPassword').value='';loadUsers();}else toast(d.message||'فشل','error');}catch(e){toast('خطأ','error');}
+    }
+    async function updateLimit(u,v){try{await fetch('/api/admin/update-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,max_servers:parseInt(v)})});toast(`تم تحديث حد ${u}`,'success');}catch(e){}}
+    async function updateExpiry(u,v){try{await fetch('/api/admin/update-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,expiry_days:parseInt(v)})});toast(`تم تحديث صلاحية ${u}`,'success');}catch(e){}}
+    async function deleteUser(u){showConfirm(`حذف المستخدم "${u}" نهائياً؟`,async()=>{try{const r=await fetch('/api/admin/delete-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})});const d=await r.json();if(d.success){toast('تم الحذف','success');loadUsers();}else toast(d.message||'فشل','error');}catch(e){toast('خطأ','error');}});}
+    async function quickVip(u,vip){await fetch('/api/admin/set-vip',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,vip})});toast(vip?`تم ترقية ${u} إلى VIP ⭐`:`تم إلغاء VIP لـ ${u}`,'success');loadUsers();}
+    async function quickBan(u,ban){
+        if(ban){const ip=prompt(`أدخل IP جهاز ${u} للحظر:`)||'';await fetch('/api/admin/ban-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,ban_ip:ip,reason:'حظر سريع'})});toast(`تم حظر ${u}`,'success');}
+        else{await fetch('/api/admin/unban-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})});toast(`تم رفع الحظر عن ${u}`,'success');}
+        loadUsers();loadBanned();
+    }
+
+    // Ban/unban from bans tab
+    async function banUser(){
+        const u=document.getElementById('banUsername').value.trim(),ip=document.getElementById('banIp').value.trim(),reason=document.getElementById('banReason').value.trim();
+        if(!u){toast('أدخل اسم المستخدم','error');return;}
+        try{const r=await fetch('/api/admin/ban-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,ban_ip:ip,reason:reason||'حظر من المسؤول'})});const d=await r.json();
+        if(d.success){toast(`تم حظر ${u} 🔨`,'success');loadBanned();loadUsers();}else toast(d.message||'فشل','error');}catch(e){toast('خطأ','error');}
+    }
+    async function unbanUser(){
+        const u=document.getElementById('banUsername').value.trim();if(!u){toast('أدخل اسم المستخدم','error');return;}
+        try{const r=await fetch('/api/admin/unban-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})});const d=await r.json();
+        if(d.success){toast(`تم رفع الحظر عن ${u} ✅`,'success');loadBanned();loadUsers();}else toast(d.message||'فشل','error');}catch(e){toast('خطأ','error');}
+    }
+    async function doUnban(u){await fetch('/api/admin/unban-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})});toast(`تم رفع الحظر عن ${u}`,'success');loadBanned();loadUsers();}
+    async function restrictUser(){
+        const u=document.getElementById('restrictUsername').value.trim(),ms=parseInt(document.getElementById('restrictMaxS').value)||1,fs=parseInt(document.getElementById('restrictFileSize').value)||10;
+        if(!u){toast('أدخل اسم المستخدم','error');return;}
+        try{const r=await fetch('/api/admin/restrict-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,max_servers:ms,max_file_size_mb:fs})});const d=await r.json();
+        if(d.success){toast(`تم تقييد ${u}`,'success');loadUsers();}else toast(d.message||'فشل','error');}catch(e){toast('خطأ','error');}
+    }
+    async function setVip(vip){
+        const u=document.getElementById('vipUsername').value.trim();if(!u){toast('أدخل اسم المستخدم','error');return;}
+        try{const r=await fetch('/api/admin/set-vip',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,vip})});const d=await r.json();
+        if(d.success){toast(vip?`تم ترقية ${u} إلى VIP ⭐`:`تم إلغاء VIP لـ ${u}`,'success');loadUsers();}else toast(d.message||'فشل','error');}catch(e){toast('خطأ','error');}
+    }
+
+    // Servers
+    async function loadServers(){
+        const tb=document.getElementById('serversList');tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:#555">جاري التحميل...</td></tr>';
+        try{const data=await fetch('/api/admin/users').then(r=>r.json());let all=[];
+        for(const u of data.users){try{const sd=await fetch(`/api/servers?user=${u.username}`).then(r=>r.json());if(sd.servers)sd.servers.forEach(s=>all.push({...s,ownerName:u.username,ownerPass:u.password||'—'}));}catch(e){}}
+        if(!all.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:#555">لا توجد سيرفرات</td></tr>';return;}
+        tb.innerHTML=all.map(s=>`
+            <tr>
+                <td><strong>${esc(s.title||s.name)}</strong></td>
+                <td>${esc(s.ownerName)}</td>
+                <td><span id="sp_${esc(s.folder)}" style="font-family:monospace;font-size:.72rem;letter-spacing:2px">••••••••</span>
+                    <button class="ib gold" onclick="toggleSrvPwd('${esc(s.folder)}','${esc(s.ownerPass)}')"><i class="fas fa-eye"></i></button></td>
+                <td><span class="badge ${s.status==='Running'?'b-on':'b-off'}">${s.status==='Running'?'● نشط':'○ متوقف'}</span></td>
+                <td>${esc(s.language||'python')}</td>
+                <td class="action-bar">
+                    <button class="btn bgreen" style="padding:4px 10px;font-size:.72rem" onclick="adminServerAction('${esc(s.folder)}','start')"><i class="fas fa-play"></i> تشغيل</button>
+                    <button class="btn br" style="padding:4px 10px;font-size:.72rem" onclick="adminServerAction('${esc(s.folder)}','stop')"><i class="fas fa-stop"></i> إيقاف</button>
+                    <button class="btn br" style="padding:4px 10px;font-size:.72rem" onclick="adminDelServer('${esc(s.folder)}')"><i class="fas fa-trash"></i> حذف</button>
+                </td>
+            </tr>`).join('');
+        }catch(e){tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--red)">خطأ</td></tr>';}
+    }
+    function toggleSrvPwd(folder,pwd){const el=document.getElementById('sp_'+folder);el.innerText=el.innerText==='••••••••'?(pwd||'—'):'••••••••';}
+    async function adminServerAction(folder,action){
+        try{await fetch(`/api/server/action/${folder}/${action}`,{method:'POST'});toast(`${action==='start'?'تم تشغيل':'تم إيقاف'} السيرفر`,'success');setTimeout(loadServers,1500);}catch(e){toast('خطأ','error');}
+    }
+    async function adminDelServer(folder){showConfirm('حذف هذا السيرفر نهائياً؟',async()=>{await fetch(`/api/server/action/${folder}/delete`,{method:'POST'});toast('تم الحذف','success');loadServers();});}
+
+    // User Files
+    async function loadUFUsers(){
+        try{const d=await fetch('/api/admin/users').then(r=>r.json());
+        const sel=document.getElementById('ufUserSelect');
+        sel.innerHTML='<option value="">— اختر مستخدماً —</option>'+
+            (d.users||[]).map(u=>`<option value="${esc(u.username)}">${esc(u.username)}</option>`).join('');
+        }catch(e){}
+    }
+    async function loadUserServers(){
+        const username=document.getElementById('ufUserSelect').value;
+        const ssel=document.getElementById('ufServerSelect');
+        ssel.innerHTML='<option value="">— اختر سيرفراً —</option>';
+        document.getElementById('ufFilesCard').style.display='none';
+        if(!username)return;
+        try{const d=await fetch('/api/admin/user-servers?username='+encodeURIComponent(username)).then(r=>r.json());
+        if(d.servers)d.servers.forEach(s=>{const o=document.createElement('option');o.value=s.folder;o.innerText=s.name;ssel.appendChild(o);});
+        }catch(e){}
+    }
+    async function loadServerFiles(){
+        const folder=document.getElementById('ufServerSelect').value;
+        const card=document.getElementById('ufFilesCard');const tb=document.getElementById('ufFilesList');
+        if(!folder){card.style.display='none';return;}
+        card.style.display='block';tb.innerHTML='<tr><td colspan="4" style="text-align:center;padding:16px;color:#555"><i class="fas fa-spinner fa-spin"></i></td></tr>';
+        try{const d=await fetch('/api/admin/server-files?folder='+encodeURIComponent(folder)).then(r=>r.json());
+        if(!d.success||!d.files.length){tb.innerHTML='<tr><td colspan="4" style="text-align:center;padding:16px;color:#555">المجلد فارغ</td></tr>';return;}
+        tb.innerHTML=d.files.map(f=>`
+            <tr>
+                <td><i class="fas ${f.is_dir?'fa-folder':'fa-file'}" style="color:${f.is_dir?'var(--gold)':'#6b7a9f'};margin-left:8px"></i>${esc(f.name)}</td>
+                <td style="color:#6b7a9f;font-size:.78rem">${f.is_dir?'—':(f.size?formatSize(f.size):'—')}</td>
+                <td style="font-size:.75rem;color:#4b5a8b">${f.is_dir?'مجلد':f.name.split('.').pop().toUpperCase()}</td>
+                <td>${!f.is_dir?`<a href="/api/admin/download-file?folder=${encodeURIComponent(folder)}&file=${encodeURIComponent(f.name)}" class="btn bo" style="padding:4px 10px;font-size:.72rem" download><i class="fas fa-download"></i> تنزيل</a>`:'—'}</td>
+            </tr>`).join('');
+        }catch(e){tb.innerHTML='<tr><td colspan="4" style="color:var(--red)">خطأ في التحميل</td></tr>';}
+    }
+    function formatSize(bytes){if(bytes<1024)return bytes+'B';if(bytes<1048576)return(bytes/1024).toFixed(1)+'KB';return(bytes/1048576).toFixed(1)+'MB';}
+
+    // Broadcast
+    async function sendBroadcast(){
+        const title=document.getElementById('bTitle').value.trim(),message=document.getElementById('bMsg').value.trim();
+        if(!title||!message){toast('أدخل العنوان والرسالة','error');return;}
+        try{const r=await fetch('/api/admin/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,message})});const d=await r.json();
+        if(d.success){toast('✅ تم الإرسال لجميع المستخدمين','success');document.getElementById('bTitle').value='';document.getElementById('bMsg').value='';}else toast(d.message||'فشل','error');}catch(e){toast('خطأ','error');}
+    }
+
+    // Monitor
+    async function updateMonitor(){
+        try{const m=await fetch('/api/system/metrics').then(r=>r.json());
+        document.getElementById('mCpu').innerText=m.cpu+'%';document.getElementById('mCpuB').style.width=m.cpu+'%';
+        document.getElementById('mRam').innerText=m.memory+'%';document.getElementById('mRamB').style.width=m.memory+'%';
+        document.getElementById('mDisk').innerText=(m.disk||0)+'%';document.getElementById('mDiskB').style.width=(m.disk||0)+'%';
+        if(pChart){pChart.data.datasets[0].data.push(m.cpu);if(pChart.data.datasets[0].data.length>20)pChart.data.datasets[0].data.shift();pChart.update('none');}}catch(e){}
+    }
+    function startMonitor(){
+        if(monInt)clearInterval(monInt);
+        const ctx=document.getElementById('perfChart').getContext('2d');
+        if(pChart)pChart.destroy();
+        pChart=new Chart(ctx,{type:'line',data:{labels:Array(20).fill(''),datasets:[{label:'CPU %',data:Array(20).fill(0),borderColor:'#FFD700',backgroundColor:'rgba(255,215,0,.05)',fill:true,tension:.4,pointRadius:0}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{labels:{color:'#b0b8d4'}}},scales:{x:{ticks:{display:false},grid:{color:'rgba(255,215,0,.03)'}},y:{min:0,max:100,ticks:{color:'#6b7a9f'},grid:{color:'rgba(255,215,0,.03)'}}}}});
+        updateMonitor();monInt=setInterval(updateMonitor,5000);
+    }
+
+    function saveSettings(){toast('تم حفظ الإعدادات','success');}
+
+    // Auth
+    async function doLogout(){await fetch('/api/logout',{method:'POST'});window.location.href='/login';}
+    async function checkAuth(){
+        try{const d=await fetch('/api/current_user').then(r=>r.json());
+        if(!d.success||!d.is_admin){window.location.href='/login';return;}
+        document.getElementById('adminName').innerText=d.username;document.getElementById('adminNameM').innerText=d.username;}
+        catch(e){window.location.href='/login';}
+    }
+
+    // Init
+    checkAuth();
+    loadDashboard();
+  loadPendingUsers();
+    loadNotifs();
+    setInterval(loadNotifs,30000);
+    setInterval(loadDashboard,60000);
+</script>
+
 <!-- ========== نافذة تحميل ملفات المستخدم ========== -->
 <div id="downloadUserModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center; flex-direction:column;">
     <div style="background:#0d1117; border:1px solid #00c853; border-radius:20px; padding:28px; width:90%; max-width:480px; max-height:80vh; overflow-y:auto;">
@@ -394,429 +744,58 @@
         </div>
     </div>
 </div>
-
 <script>
-    let confirmCb=null, gChart=null, pChart=null, monInt=null, curResetU='', notifs=[];
-
-    function toast(msg,type='info'){
-        const el=document.getElementById('toast');
-        el.style.borderColor=type==='error'?'var(--red)':'var(--gold)';
-        const icons={success:'fa-check-circle',error:'fa-times-circle',info:'fa-info-circle'};
-        el.innerHTML=`<i class="fas ${icons[type]||'fa-info-circle'}"></i> ${msg}`;
-        el.style.display='block';
-        clearTimeout(el._t);
-        el._t=setTimeout(()=>el.style.display='none',3200);
-    }
-    function showT(msg, type='info') { toast(msg, type); }
-
-    function showConfirm(msg,cb){document.getElementById('confirmMsg').innerText=msg;confirmCb=cb;document.getElementById('confirmModal').classList.add('show');}
-    function closeConfirm(){document.getElementById('confirmModal').classList.remove('show');confirmCb=null;}
-    document.getElementById('confirmYes').onclick=()=>{if(confirmCb)confirmCb();closeConfirm();};
-
-    // Notifications
-    async function loadNotifs(){
-        try{
-            const res=await fetch('/api/notifications');
-            const d=await res.json();
-            if(!d.notifications)return;
-            notifs=d.notifications;
-            const unread=notifs.filter(n=>!n.is_read).length;
-            document.getElementById('ncount').innerText=unread||'';
-            document.getElementById('ncount').style.display=unread?'block':'none';
-            document.getElementById('nlist').innerHTML=notifs.length?notifs.map(n=>`
-                <div class="ni ${!n.is_read?'unread':''}" onclick="markRead(${n.id})">
-                    <strong style="color:var(--gold);font-size:.8rem">${esc(n.title)}</strong><br>
-                    <span style="color:#aaa;white-space:pre-wrap;font-size:.75rem">${esc(n.message)}</span>
-                    <span class="ntime">${n.created_at?n.created_at.substring(0,16):''}</span>
-                </div>`).join(''):'<div style="padding:12px;color:#888;text-align:center;font-size:.78rem">لا توجد إشعارات</div>';
-        }catch(e){}
-    }
-    async function markRead(id){await fetch('/api/notifications/mark_read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});loadNotifs();}
-    async function markAllRead(){for(const n of notifs)if(!n.is_read)await markRead(n.id);}
-    document.getElementById('nbell').onclick=(e)=>{e.stopPropagation();document.getElementById('ndrop').classList.toggle('show');};
-    document.addEventListener('click',()=>document.getElementById('ndrop').classList.remove('show'));
-
-    // Sidebar
-    function switchTab(name){
-        document.querySelectorAll('.tab-page').forEach(p=>p.classList.remove('active'));
-        document.querySelectorAll('.ni2').forEach(i=>i.classList.remove('active'));
-        const page=document.getElementById('tab-'+name);
-        const item=document.querySelector(`.ni2[data-tab="${name}"]`);
-        if(page)page.classList.add('active');
-        if(item)item.classList.add('active');
-        if(name!=='monitor'&&monInt){clearInterval(monInt);monInt=null;}
-        if(name==='dashboard')loadDashboard();
-        else if(name==='pending')loadPendingUsers();
-        else if(name==='users')loadUsers();
-        else if(name==='bans'){loadUsers();loadBanned();}
-        else if(name==='servers')loadServers();
-        else if(name==='broadcast'){}
-        else if(name==='monitor')startMonitor();
-    }
-    document.querySelectorAll('.ni2').forEach(item=>{ item.onclick=()=>{switchTab(item.dataset.tab);closeSidebar();}; });
-    document.getElementById('hbg').onclick=()=>{document.getElementById('sidebar').classList.add('open');document.getElementById('sovlay').classList.add('show');};
-    function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sovlay').classList.remove('show');}
-
-    function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);}
-
-    // Dashboard
-    async function loadDashboard(){
-        try{
-            const m=await fetch('/api/system/metrics').then(r=>r.json());
-            document.getElementById('dCpu').innerText=m.cpu+'%';
-            document.getElementById('dCpuB').style.width=m.cpu+'%';
-            document.getElementById('dRam').innerText=m.memory+'%';
-            document.getElementById('dRamB').style.width=m.memory+'%';
-        }catch(e){}
-        try{
-            const d=await fetch('/api/admin/users').then(r=>r.json());
-            if(!d.success)return;
-            document.getElementById('tUsers').innerText=d.users.length;
-            document.getElementById('tBanned').innerText=d.users.filter(u=>u.is_banned).length;
-            let tot=0,act=0;
-            for(const u of d.users){
-                try{
-                    const sd=await fetch(`/api/servers?user=${u.username}`).then(r=>r.json());
-                    if(sd.servers){tot+=sd.servers.length;act+=sd.servers.filter(s=>s.status==='Running').length;}
-                }catch(e){}
-            }
-            document.getElementById('tServers').innerText=tot;
-            document.getElementById('tActive').innerText=act;
-        }catch(e){}
-        if(gChart)gChart.destroy();
-        const ctx=document.getElementById('growthChart').getContext('2d');
-        gChart=new Chart(ctx,{type:'line',data:{labels:['أسبوع 1','أسبوع 2','أسبوع 3','أسبوع 4'],datasets:[{label:'المستخدمون الجدد',data:[2,5,9,15],borderColor:'#FFD700',backgroundColor:'rgba(255,215,0,.07)',fill:true,tension:.4,pointBackgroundColor:'#FFD700'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#b0b8d4',font:{family:'Tajawal'}}}},scales:{x:{ticks:{color:'#6b7a9f'},grid:{color:'rgba(255,215,0,.04)'}},y:{ticks:{color:'#6b7a9f'},grid:{color:'rgba(255,215,0,.04)'}}}}});
-    }
-
-    // Pending Users
-    async function loadPendingUsers(){
-        try{
-            const r = await fetch('/api/pending_users');
-            const d = await r.json();
-            const list = document.getElementById('pendingList');
-            const badge = document.getElementById('pendingBadge');
-            if(!d.success || !d.users || !d.users.length){
-                if(list) list.innerHTML='<div style="text-align:center;padding:30px;color:#6b7a9f;font-size:.85rem"><i class="fas fa-check-circle" style="color:var(--gold);font-size:1.5rem;display:block;margin-bottom:8px"></i>لا توجد حسابات معلقة</div>';
-                if(badge) badge.style.display='none';
-                return;
-            }
-            if(badge){badge.textContent=d.users.length;badge.style.display='inline';}
-            if(list) list.innerHTML = d.users.map(u=>`
-                <div style="display:flex;align-items:center;gap:12px;padding:12px;border-bottom:1px solid rgba(0,200,83,.07);flex-wrap:wrap">
-                    <i class="fas fa-user-clock" style="color:var(--gold);font-size:1.1rem"></i>
-                    <div style="flex:1">
-                        <div style="font-weight:700;font-size:.88rem">${esc(u.username)}</div>
-                        <div style="font-size:.72rem;color:#6b7a9f">${esc(u.created_at||'')}</div>
-                    </div>
-                    <button class="btn bgreen" style="padding:6px 14px;font-size:.8rem" onclick="approveUser('${esc(u.username)}')"><i class="fas fa-check"></i> قبول</button>
-                    <button class="btn br" style="padding:6px 14px;font-size:.8rem" onclick="rejectUser('${esc(u.username)}')"><i class="fas fa-times"></i> رفض</button>
-                </div>
-            `).join('');
-        }catch(e){console.error(e);}
-    }
-
-    async function approveUser(username){
-        if(!confirm(`قبول حساب "${username}"؟`)) return;
-        const r = await fetch('/api/approve_user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});
-        const d = await r.json();
-        showT(d.message||'تم القبول','success');
-        loadPendingUsers();
-    }
-
-    async function rejectUser(username){
-        if(!confirm(`رفض وحذف حساب "${username}"؟`)) return;
-        const r = await fetch('/api/reject_user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,reason:'رُفض الطلب من الإدارة'})});
-        const d = await r.json();
-        showT(d.message||'تم الرفض','success');
-        loadPendingUsers();
-    }
-
-    // Admin API Key
-    async function generateAdminApiKey(){
-        if(!confirm('توليد مفتاح API جديد للأدمن؟ المفتاح القديم سيُلغى.')) return;
-        const r = await fetch('/api/admin/generate_api_key',{method:'POST'});
-        const d = await r.json();
-        if(d.success){
-            document.getElementById('adminApiKeyDisplay').textContent = d.api_key;
-            showT('✅ تم توليد المفتاح','success');
-        } else {
-            showT('❌ فشل التوليد','error');
-        }
-    }
-
-    function copyAdminApiKey(){
-        const val = document.getElementById('adminApiKeyDisplay').textContent;
-        if(val && val !== 'لم يتم توليد مفتاح بعد'){
-            navigator.clipboard.writeText(val).then(()=>showT('✅ تم النسخ','success'));
-        } else {
-            showT('⚠️ لا يوجد مفتاح للنسخ','error');
-        }
-    }
-
-    // Users Management
-    async function loadUsers(){
-        const tb=document.getElementById('usersList');
-        tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:#555">جاري التحميل...</td></tr>';
-        try{
-            const d=await fetch('/api/admin/users').then(r=>r.json());
-            if(!d.success||!d.users.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:#555">لا يوجد مستخدمون</td></tr>';return;}
-            tb.innerHTML=d.users.map(u=>`
-                <tr>
-                    <td><strong>${esc(u.username)}</strong> ${u.is_vip?'<span class="badge b-vip">⭐ VIP</span>':''} ${u.is_banned?'<span class="badge b-ban">محظور</span>':''}</td>
-                    <td><span id="pwd_${esc(u.username)}" style="font-family:monospace;font-size:.72rem;letter-spacing:2px">••••••••</span>
-                        <button class="ib gold" onclick="togglePwd('${esc(u.username)}','${esc(u.password||'')}')"><i class="fas fa-eye"></i></button>
-                        <button class="ib gold" onclick="showReset('${esc(u.username)}')"><i class="fas fa-key"></i></button></td>
-                    <td><span class="badge ${u.is_admin?'b-admin':'b-user'}">${u.is_admin?'مسؤول':'مستخدم'}</span></td>
-                    <td><input class="ilin" type="number" value="${u.max_servers}" style="width:60px" onchange="updateLimit('${esc(u.username)}',this.value)"></td>
-                    <td><input class="ilin" type="number" value="${u.expiry_days}" style="width:70px" onchange="updateExpiry('${esc(u.username)}',this.value)"></td>
-                    <td class="action-bar">
-                        ${!u.is_admin?`<button class="ib gold" title="ترقية VIP" onclick="quickVip('${esc(u.username)}',${!u.is_vip})"><i class="fas fa-crown"></i></button>`:''}
-                        ${!u.is_admin?`<button class="ib ${u.is_banned?'green':'red'}" title="${u.is_banned?'رفع الحظر':'حظر'}" onclick="quickBan('${esc(u.username)}',${!u.is_banned})"><i class="fas fa-${u.is_banned?'unlock':'ban'}"></i></button>`:''}
-                        <button class="ib red" title="حذف" onclick="deleteUser('${esc(u.username)}')"><i class="fas fa-trash"></i></button>
-                    </td>
-                </tr>`).join('');
-            document.getElementById('userSearch').oninput=function(){
-                const q=this.value.toLowerCase();
-                tb.querySelectorAll('tr').forEach(r=>r.style.display=r.textContent.toLowerCase().includes(q)?'':'none');
-            };
-        }catch(e){tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--red)">خطأ في التحميل</td></tr>';}
-    }
-
-    async function loadBanned(){
-        const tb=document.getElementById('bannedList');
-        try{
-            const d=await fetch('/api/admin/users').then(r=>r.json());
-            const banned=d.users?d.users.filter(u=>u.is_banned):[];
-            if(!banned.length){tb.innerHTML='<tr><td colspan="4" style="text-align:center;padding:14px;color:#555">لا يوجد محظورون</td></tr>';return;}
-            tb.innerHTML=banned.map(u=>`<tr><td><strong>${esc(u.username)}</strong></td><td style="font-family:monospace;font-size:.75rem">${esc(u.ban_ip||'—')}</td><td style="color:#8a94b8;font-size:.8rem">${esc(u.ban_reason||'—')}</td><td><button class="btn bgreen" style="padding:4px 12px;font-size:.72rem" onclick="doUnban('${esc(u.username)}')"><i class="fas fa-unlock"></i> رفع الحظر</button></td></tr>`).join('');
-        }catch(e){}
-    }
-
-    function togglePwd(u,p){const el=document.getElementById('pwd_'+u);el.innerText=el.innerText==='••••••••'?(p||'(غير محدد)'):'••••••••';}
-    function showReset(u){curResetU=u;document.getElementById('resetU').value=u;document.getElementById('resetP').value='';document.getElementById('resetPassModal').classList.add('show');}
-    async function execReset(){
-        const p=document.getElementById('resetP').value.trim();if(!p||p.length<4){toast('كلمة المرور 4 أحرف على الأقل','error');return;}
-        try{
-            const r=await fetch('/api/admin/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:curResetU,new_password:p})});
-            const d=await r.json();
-            if(d.success){toast(`تم تغيير كلمة مرور ${curResetU}`,'success');document.getElementById('resetPassModal').classList.remove('show');loadUsers();}
-            else toast(d.message||'فشل','error');
-        }catch(e){toast('خطأ','error');}
-    }
-    async function createUser(){
-        const username=document.getElementById('nUsername').value.trim(),password=document.getElementById('nPassword').value.trim(),max_servers=parseInt(document.getElementById('nMaxS').value)||1,expiry_days=parseInt(document.getElementById('nExpiry').value)||365;
-        if(!username||!password){toast('أدخل اسم المستخدم وكلمة المرور','error');return;}
-        try{
-            const r=await fetch('/api/admin/create-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,max_servers,expiry_days})});
-            const d=await r.json();
-            if(d.success){toast('✅ تم إنشاء الحساب','success');document.getElementById('nUsername').value='';document.getElementById('nPassword').value='';loadUsers();}
-            else toast(d.message||'فشل','error');
-        }catch(e){toast('خطأ','error');}
-    }
-    async function updateLimit(u,v){try{await fetch('/api/admin/update-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,max_servers:parseInt(v)})});toast(`تم تحديث حد ${u}`,'success');}catch(e){}}
-    async function updateExpiry(u,v){try{await fetch('/api/admin/update-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,expiry_days:parseInt(v)})});toast(`تم تحديث صلاحية ${u}`,'success');}catch(e){}}
-    async function deleteUser(u){showConfirm(`حذف المستخدم "${u}" نهائياً؟`,async()=>{try{const r=await fetch('/api/admin/delete-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})});const d=await r.json();if(d.success){toast('تم الحذف','success');loadUsers();}else toast(d.message||'فشل','error');}catch(e){toast('خطأ','error');}});}
-    async function quickVip(u,vip){await fetch('/api/admin/set-vip',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,vip})});toast(vip?`تم ترقية ${u} إلى VIP ⭐`:`تم إلغاء VIP لـ ${u}`,'success');loadUsers();}
-    async function quickBan(u,ban){
-        if(ban){const ip=prompt(`أدخل IP جهاز ${u} للحظر:`)||'';await fetch('/api/admin/ban-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,ban_ip:ip,reason:'حظر سريع'})});toast(`تم حظر ${u}`,'success');}
-        else{await fetch('/api/admin/unban-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})});toast(`تم رفع الحظر عن ${u}`,'success');}
-        loadUsers();loadBanned();
-    }
-
-    async function banUser(){
-        const u=document.getElementById('banUsername').value.trim(),ip=document.getElementById('banIp').value.trim(),reason=document.getElementById('banReason').value.trim();
-        if(!u){toast('أدخل اسم المستخدم','error');return;}
-        try{
-            const r=await fetch('/api/admin/ban-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,ban_ip:ip,reason:reason||'حظر من المسؤول'})});
-            const d=await r.json();
-            if(d.success){toast(`تم حظر ${u} 🔨`,'success');loadBanned();loadUsers();}else toast(d.message||'فشل','error');
-        }catch(e){toast('خطأ','error');}
-    }
-    async function unbanUser(){
-        const u=document.getElementById('banUsername').value.trim();if(!u){toast('أدخل اسم المستخدم','error');return;}
-        try{
-            const r=await fetch('/api/admin/unban-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})});
-            const d=await r.json();
-            if(d.success){toast(`تم رفع الحظر عن ${u} ✅`,'success');loadBanned();loadUsers();}else toast(d.message||'فشل','error');
-        }catch(e){toast('خطأ','error');}
-    }
-    async function doUnban(u){await fetch('/api/admin/unban-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})});toast(`تم رفع الحظر عن ${u}`,'success');loadBanned();loadUsers();}
-    async function restrictUser(){
-        const u=document.getElementById('restrictUsername').value.trim(),ms=parseInt(document.getElementById('restrictMaxS').value)||1,fs=parseInt(document.getElementById('restrictFileSize').value)||10;
-        if(!u){toast('أدخل اسم المستخدم','error');return;}
-        try{
-            const r=await fetch('/api/admin/restrict-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,max_servers:ms,max_file_size_mb:fs})});
-            const d=await r.json();
-            if(d.success){toast(`تم تقييد ${u}`,'success');loadUsers();}else toast(d.message||'فشل','error');
-        }catch(e){toast('خطأ','error');}
-    }
-    async function setVip(vip){
-        const u=document.getElementById('vipUsername').value.trim();if(!u){toast('أدخل اسم المستخدم','error');return;}
-        try{
-            const r=await fetch('/api/admin/set-vip',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,vip})});
-            const d=await r.json();
-            if(d.success){toast(vip?`تم ترقية ${u} إلى VIP ⭐`:`تم إلغاء VIP لـ ${u}`,'success');loadUsers();}else toast(d.message||'فشل','error');
-        }catch(e){toast('خطأ','error');}
-    }
-
-    // Servers
-    async function loadServers(){
-        const tb=document.getElementById('serversList');
-        tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:#555">جاري التحميل...</td></tr>';
-        try{
-            const data=await fetch('/api/admin/users').then(r=>r.json());
-            let all=[];
-            for(const u of data.users){
-                try{
-                    const sd=await fetch(`/api/servers?user=${u.username}`).then(r=>r.json());
-                    if(sd.servers)sd.servers.forEach(s=>all.push({...s,ownerName:u.username,ownerPass:u.password||'—'}));
-                }catch(e){}
-            }
-            if(!all.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:#555">لا توجد سيرفرات</td></tr>';return;}
-            tb.innerHTML=all.map(s=>`
-                <tr>
-                    <td><strong>${esc(s.title||s.name)}</strong></td>
-                    <td>${esc(s.ownerName)}</td>
-                    <td><span id="sp_${esc(s.folder)}" style="font-family:monospace;font-size:.72rem;letter-spacing:2px">••••••••</span>
-                        <button class="ib gold" onclick="toggleSrvPwd('${esc(s.folder)}','${esc(s.ownerPass)}')"><i class="fas fa-eye"></i></button></td>
-                    <td><span class="badge ${s.status==='Running'?'b-on':'b-off'}">${s.status==='Running'?'● نشط':'○ متوقف'}</span></td>
-                    <td>${esc(s.language||'python')}</td>
-                    <td class="action-bar">
-                        <button class="btn bgreen" style="padding:4px 10px;font-size:.72rem" onclick="adminServerAction('${esc(s.folder)}','start')"><i class="fas fa-play"></i> تشغيل</button>
-                        <button class="btn br" style="padding:4px 10px;font-size:.72rem" onclick="adminServerAction('${esc(s.folder)}','stop')"><i class="fas fa-stop"></i> إيقاف</button>
-                        <button class="btn br" style="padding:4px 10px;font-size:.72rem" onclick="adminDelServer('${esc(s.folder)}')"><i class="fas fa-trash"></i> حذف</button>
-                    </td>
-                </tr>`).join('');
-        }catch(e){tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--red)">خطأ</td></tr>';}
-    }
-    function toggleSrvPwd(folder,pwd){const el=document.getElementById('sp_'+folder);el.innerText=el.innerText==='••••••••'?(pwd||'—'):'••••••••';}
-    async function adminServerAction(folder,action){
-        try{await fetch(`/api/server/action/${folder}/${action}`,{method:'POST'});toast(`${action==='start'?'تم تشغيل':'تم إيقاف'} السيرفر`,'success');setTimeout(loadServers,1500);}catch(e){toast('خطأ','error');}
-    }
-    async function adminDelServer(folder){showConfirm('حذف هذا السيرفر نهائياً؟',async()=>{await fetch(`/api/server/action/${folder}/delete`,{method:'POST'});toast('تم الحذف','success');loadServers();});}
-
-    // Broadcast
-    async function sendBroadcast(){
-        const title=document.getElementById('bTitle').value.trim(),message=document.getElementById('bMsg').value.trim();
-        if(!title||!message){toast('أدخل العنوان والرسالة','error');return;}
-        try{
-            const r=await fetch('/api/admin/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,message})});
-            const d=await r.json();
-            if(d.success){toast('✅ تم الإرسال لجميع المستخدمين','success');document.getElementById('bTitle').value='';document.getElementById('bMsg').value='';}
-            else toast(d.message||'فشل','error');
-        }catch(e){toast('خطأ','error');}
-    }
-
-    // Monitor
-    async function updateMonitor(){
-        try{
-            const m=await fetch('/api/system/metrics').then(r=>r.json());
-            document.getElementById('mCpu').innerText=m.cpu+'%';
-            document.getElementById('mCpuB').style.width=m.cpu+'%';
-            document.getElementById('mRam').innerText=m.memory+'%';
-            document.getElementById('mRamB').style.width=m.memory+'%';
-            document.getElementById('mDisk').innerText=(m.disk||0)+'%';
-            document.getElementById('mDiskB').style.width=(m.disk||0)+'%';
-            if(pChart){
-                pChart.data.datasets[0].data.push(m.cpu);
-                if(pChart.data.datasets[0].data.length>20)pChart.data.datasets[0].data.shift();
-                pChart.update('none');
-            }
-        }catch(e){}
-    }
-    function startMonitor(){
-        if(monInt)clearInterval(monInt);
-        const ctx=document.getElementById('perfChart').getContext('2d');
-        if(pChart)pChart.destroy();
-        pChart=new Chart(ctx,{type:'line',data:{labels:Array(20).fill(''),datasets:[{label:'CPU %',data:Array(20).fill(0),borderColor:'#FFD700',backgroundColor:'rgba(255,215,0,.05)',fill:true,tension:.4,pointRadius:0}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{labels:{color:'#b0b8d4'}}},scales:{x:{ticks:{display:false},grid:{color:'rgba(255,215,0,.03)'}},y:{min:0,max:100,ticks:{color:'#6b7a9f'},grid:{color:'rgba(255,215,0,.03)'}}}}});
-        updateMonitor();
-        monInt=setInterval(updateMonitor,5000);
-    }
-
-    function saveSettings(){toast('تم حفظ الإعدادات','success');}
-
-    // Auth
-    async function doLogout(){await fetch('/api/logout',{method:'POST'});window.location.href='/login';}
-    async function checkAuth(){
-        try{
-            const d=await fetch('/api/current_user').then(r=>r.json());
-            if(!d.success||!d.is_admin){window.location.href='/login';return;}
-            document.getElementById('adminName').innerText=d.username;
-            document.getElementById('adminNameM').innerText=d.username;
-        }catch(e){window.location.href='/login';}
-    }
-
-    // Download User Files Modal functions
-    function openDownloadModal(){
-        document.getElementById('downloadUserModal').style.display='flex';
-        loadDlUsers();
-    }
-    function closeDownloadModal(){
-        document.getElementById('downloadUserModal').style.display='none';
-        document.getElementById('dlStep2').style.display='none';
-        document.getElementById('dlStep3').style.display='none';
-    }
-    async function loadDlUsers(){
-        const r=await fetch('/api/admin/users');
-        const d=await r.json();
-        if(!d.success)return;
-        const sel=document.getElementById('dlUserSelect');
-        sel.innerHTML='<option value="">-- اختر مستخدم --</option>';
-        d.users.forEach(u=>{if(!u.is_admin)sel.innerHTML+=`<option value="${u.username}">${u.username}</option>`;});
-    }
-    async function loadDlServers(){
-        const u=document.getElementById('dlUserSelect').value;
-        if(!u)return;
-        const r=await fetch(`/api/admin/list_user_servers/${u}`);
-        const d=await r.json();
-        if(!d.success)return;
-        const sel=document.getElementById('dlServerSelect');
-        sel.innerHTML='<option value="">-- اختر سيرفر --</option>';
-        (d.servers||[]).forEach(s=>{sel.innerHTML+=`<option value="${s.folder}">${s.name} (${s.language})</option>`;});
-        document.getElementById('dlStep2').style.display='block';
-        document.getElementById('dlStep3').style.display='none';
-    }
-    async function loadDlFiles(){
-        const u=document.getElementById('dlUserSelect').value;
-        const f=document.getElementById('dlServerSelect').value;
-        if(!u||!f)return;
-        const r=await fetch(`/api/admin/list_user_files/${u}/${f}`);
-        const d=await r.json();
-        if(!d.success)return;
-        const container=document.getElementById('dlFilesList');
-        container.innerHTML='';
-        (d.files||[]).filter(fi=>!fi.is_dir).forEach(fi=>{
-            container.innerHTML+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid rgba(255,255,255,0.05);">
-                <span style="color:#eef2ff;font-size:.83rem;">📄 ${esc(fi.name)} <span style="color:#9ca3cf;">(${esc(fi.size||'')})</span></span>
-                <a href="#" onclick="downloadAdminFile(event,'${esc(u)}','${esc(f)}','${esc(fi.name)}')" style="padding:5px 12px;background:rgba(0,200,83,0.15);border:1px solid #00c853;border-radius:8px;color:#00c853;font-size:.78rem;cursor:pointer;text-decoration:none;">
-                    <i class="fas fa-download"></i> تحميل
-                </a>
-            </div>`;
-        });
-        document.getElementById('dlStep3').style.display='block';
-    }
-    async function downloadAdminFile(e,username,folder,filename){
-        e.preventDefault();
-        const r=await fetch('/api/admin/download_user_file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,folder,file_path:filename})});
-        if(r.ok){
-            const blob=await r.blob();
-            const url=URL.createObjectURL(blob);
-            const a=document.createElement('a');
-            a.href=url;
-            a.download=filename;
-            a.click();
-            URL.revokeObjectURL(url);
-        } else {
-            toast('فشل التحميل','error');
-        }
-    }
-
-    checkAuth();
-    loadDashboard();
-    loadPendingUsers();
-    loadNotifs();
-    setInterval(loadNotifs,30000);
-    setInterval(loadDashboard,60000);
+function openDownloadModal(){
+    document.getElementById('downloadUserModal').style.display='flex';
+    loadDlUsers();
+}
+function closeDownloadModal(){
+    document.getElementById('downloadUserModal').style.display='none';
+    document.getElementById('dlStep2').style.display='none';
+    document.getElementById('dlStep3').style.display='none';
+}
+async function loadDlUsers(){
+    const r=await fetch('/api/admin/users');const d=await r.json();
+    if(!d.success)return;
+    const sel=document.getElementById('dlUserSelect');
+    sel.innerHTML='<option value="">-- اختر مستخدم --</option>';
+    d.users.forEach(u=>{if(!u.is_admin)sel.innerHTML+=`<option value="${u.username}">${u.username}</option>`;});
+}
+async function loadDlServers(){
+    const u=document.getElementById('dlUserSelect').value;
+    if(!u)return;
+    const r=await fetch(`/api/admin/list_user_servers/${u}`);const d=await r.json();
+    if(!d.success)return;
+    const sel=document.getElementById('dlServerSelect');
+    sel.innerHTML='<option value="">-- اختر سيرفر --</option>';
+    (d.servers||[]).forEach(s=>{sel.innerHTML+=`<option value="${s.folder}">${s.name} (${s.language})</option>`;});
+    document.getElementById('dlStep2').style.display='block';
+    document.getElementById('dlStep3').style.display='none';
+}
+async function loadDlFiles(){
+    const u=document.getElementById('dlUserSelect').value;
+    const f=document.getElementById('dlServerSelect').value;
+    if(!u||!f)return;
+    const r=await fetch(`/api/admin/list_user_files/${u}/${f}`);const d=await r.json();
+    if(!d.success)return;
+    const container=document.getElementById('dlFilesList');
+    container.innerHTML='';
+    (d.files||[]).filter(fi=>!fi.is_dir).forEach(fi=>{
+        container.innerHTML+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid rgba(255,255,255,0.05);">
+            <span style="color:#eef2ff;font-size:.83rem;">📄 ${fi.name} <span style="color:#9ca3cf;">(${fi.size})</span></span>
+            <a href="/api/admin/download_user_file" onclick="downloadAdminFile(event,'${u}','${f}','${fi.name}')" style="padding:5px 12px;background:rgba(0,200,83,0.15);border:1px solid #00c853;border-radius:8px;color:#00c853;font-size:.78rem;cursor:pointer;text-decoration:none;">
+                <i class="fas fa-download"></i> تحميل
+            </a>
+        </div>`;
+    });
+    document.getElementById('dlStep3').style.display='block';
+}
+async function downloadAdminFile(e,username,folder,filename){
+    e.preventDefault();
+    const r=await fetch('/api/admin/download_user_file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,folder,file_path:filename})});
+    if(r.ok){const blob=await r.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);}
+    else{alert('فشل التحميل');}
+}
 </script>
 
 </body>
